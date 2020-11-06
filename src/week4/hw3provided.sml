@@ -101,49 +101,85 @@ val check_pat = fn p => let
                 in
                     null(boollist)
                 end
-                            
-val match = fn vp => let
-                val zipped = ListPair.zip(vp)
-                val equals_ = fn (a, b) => let
-                                  val zipped = ListPair.zip(a, b)
-                                  val mapped = List.map(fn a => if #a = #b then true else false)(zipped)
-                                  val reduced = List.foldl(fn (a, b) => a andalso b)(true)(mapped)
-                              in
-                                  reduced
-                              end
-                                               
-                val helper = fn(v, p) = case p of
-                                            Wildcard => SOME ()
-                                          | Variable s => SOME (s, v)
-                                          | UnitP => (case v of
-                                                        Unit => SOME ()
-                                                        | _ => NONE)
-                                          | ConstP k => (case v of
-                                                             Const n => if k = n then SOME () else NONE
-                                                           | _ => NONE)
-                                          | TupleP ps => (case v of
-                                                              Tuple vs => if (null ps andalso null vs) orelse (hd ps) = (hd vs) then
-                                                                              let
-                                                                                  val res = helper(TupleP (tl ps), Tuple (tl vs))
-                                                                              in
-                                                                                  if isSome res
-                                                                                            (hd vs)::valOf(res)
-                                                                                  else
-                                                                                      NONE
-                                                                              end
-                                                          else NONE
-                                                         | _ => NONE)
-                                                             ConstructorP s1 p => (case v of
-                                                                                       Constructor s2 v => if s1 = s2 andalso p = v then
-                                                                                                                   SOME p else NONE)
-                val found = List.foldl(fn (a, b) => let
-                                           val av = #1 a
-                                           val ap = #2 a
-                                           val bv = #1 b
-                                           val bp = #2 b
-                                       in
-                                           
-                                       end
-                                      )
+(* fun helper p v = case p of
+                              Wildcard => SOME []
+                            | Variable s => SOME [(s, v)]
+                            | UnitP => (case v of
+                                            Unit => SOME []
+                                          | _ => NONE)
+                            | ConstP k => (case v of
+                                               Const n => if k = n then SOME [] else NONE
+                                             | _ => NONE)
+                            | TupleP ps => (case v of
+                                                Tuple vs => if (null ps andalso null vs) orelse helper((hd ps), (hd vs)) then
+                                                                let
+                                                                    val head = helper (hd ps, hd vs)
+                                                                    val zipped = ListPair.zip(tl ps, tl vs)
+                                                                    val remains = List.map(fn (p1, v1) => helper(p1, v1)) zipped
+                                                                    val failed = List.filter(fn a => not (isSome a)) remains
+                                                                    val successed = List.filter(fn a => isSome a) remains
+                                                                    val mapped = List.map(fn a => valOf a) remains
+                                                                in
+                                                                    if isSome head andalso null failed
+                                                                    then
+                                                                        SOME (valOf(head) @ mapped)
+                                                                    else
+                                                                        NONE
+                                                                end
+                                                            else NONE
+                                              | _ => NONE)
+                            | ConstructorP sp => (case v of
+                                                        Constructor sv => if #1 sp = #1 sv andalso isSome(helper(#2 sp, #2 sv)) then
+                                                                                SOME [(p)] else NONE)
+                                              | _ => NONE *)
+fun help(pair: (pattern * valu)) = case pair of
+                    (Wildcard, _) => SOME []
+                  | (Variable s, v) => SOME [(s, v)] 
+                  | (UnitP, Unit) => SOME []
+                  | (ConstP k, Const n) => if k = n
+                                           then
+                                               SOME []
+                                           else
+                                               NONE
+                  | (TupleP ps, Tuple vs) => if List.length ps = List.length vs
+                                             then
+                                                 let
+                                                     val mapped = List.map(fn p => help p) (ListPair.zip(ps, vs))
+                                                     val filtered = List.filter(fn a => isSome a) mapped
+                                                     val result = List.map(fn a => valOf a) filtered
+                                                     val testing = List.filter(fn a => not (isSome a)) mapped
+                                                 in
+                                                     if null testing
+                                                     then
+                                                         SOME result
+                                                     else
+                                                         NONE
+                                                 end
+                                             else
+                                                 NONE
+                  | (ConstructorP (s1, p1), Constructor (s2, v1)) => if s1 = s2
+                                                                     then
+                                                                         let
+                                                                             val p = help(p1, v1)
+                                                                         in
+                                                                             SOME p
+                                                                         end
+                                                                             
+                                                                     else
+                                                                         NONE
+                  | (_, _) => NONE
+
+val match = fn (v, p) => let
+                val found = help(p v)
             in
+                found
             end
+val first_match = fn v =>
+                     fn pats =>
+                        let
+                            val found = List.map (fn a => (v a)) pats
+                            val curried = first_answer help
+                        in
+                            (curried found
+                            handle NoAnswer => NONE)
+                        end
