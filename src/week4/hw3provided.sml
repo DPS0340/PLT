@@ -58,7 +58,7 @@ val longest_capitalized = fn words => if only_capitals(words) <> []
                                   ""
 val rev_string = fn words => implode(rev(explode(words)))
 
-val first_answer = fn func : ('a -> 'b option) => (fn alist : 'a list => let
+val first_answer = fn (func : ('a -> 'b option)) => (fn (alist : 'a list) : 'b => let
                                    val mapped = List.map(func)(alist)
                                    val filtered = List.filter(fn a => isSome(a))(mapped)
                                in
@@ -95,8 +95,17 @@ val count_some_var = fn p => let
                          curried p
                      end
 
-val check_pat = fn p => let
-                    val found = List.foldl(fn (a, b) => a @ b) ([]) (p)
+val check_pat = fn (p : pattern) => let
+                    fun help (p) : string list = case (p) of
+                                       (Variable x) => [x] 
+                                     | (TupleP ps) => let
+                                         val psmap = List.map(fn x => help(x)) (ps)
+                                     in
+                                        List.foldl(fn (a, b) => a @ b) [] psmap
+                                     end
+                                     | _ => []
+
+                    val found = help (p)
                     val boollist = List.foldl (fn (a, b) => if List.exists(fn c => a = c)(b) then [a] else []) ([]) (found)
                 in
                     null(boollist)
@@ -132,7 +141,7 @@ val check_pat = fn p => let
                                                         Constructor sv => if #1 sp = #1 sv andalso isSome(helper(#2 sp, #2 sv)) then
                                                                                 SOME [(p)] else NONE)
                                               | _ => NONE *)
-fun help(pair: (pattern * valu)) = case pair of
+fun help (v, p) : (string * valu) list option = case (p, v) of
                     (Wildcard, _) => SOME []
                   | (Variable s, v) => SOME [(s, v)] 
                   | (UnitP, Unit) => SOME []
@@ -144,14 +153,15 @@ fun help(pair: (pattern * valu)) = case pair of
                   | (TupleP ps, Tuple vs) => if List.length ps = List.length vs
                                              then
                                                  let
-                                                     val mapped = List.map(fn p => help p) (ListPair.zip(ps, vs))
+                                                     val mapped = List.map(fn p => help p) (ListPair.zip(vs, ps))
+                                                     fun flat xs = List.foldr (fn (x, acc) => x @ acc) [] xs
                                                      val filtered = List.filter(fn a => isSome a) mapped
                                                      val result = List.map(fn a => valOf a) filtered
                                                      val testing = List.filter(fn a => not (isSome a)) mapped
                                                  in
                                                      if null testing
                                                      then
-                                                         SOME result
+                                                         SOME (flat(result))
                                                      else
                                                          NONE
                                                  end
@@ -160,14 +170,13 @@ fun help(pair: (pattern * valu)) = case pair of
                   | (ConstructorP (s1, p1), Constructor (s2, v1)) => if s1 = s2
                                                                      then
                                                                          let
-                                                                             val p = help(p1, v1)
+                                                                             val p = help(v1, p1)
                                                                          in
-                                                                             SOME p
+                                                                             p
                                                                          end
-                                                                             
                                                                      else
                                                                          NONE
-                  | (_, _) => NONE
+                  | _ => NONE
 
 val match = fn (v, p) => let
                 val found = help(p v)
