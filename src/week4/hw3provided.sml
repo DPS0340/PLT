@@ -58,7 +58,7 @@ val longest_capitalized = fn words => if only_capitals(words) <> []
                                   ""
 val rev_string = fn words => implode(rev(explode(words)))
 
-val first_answer = fn (func : ('a -> 'b option)) => (fn (alist : 'a list) : 'b => let
+val first_answer = fn (func : ('a -> 'b option)) => (fn (alist : 'a list) => let
                                    val mapped = List.map(func)(alist)
                                    val filtered = List.filter(fn a => isSome(a))(mapped)
                                in
@@ -66,7 +66,7 @@ val first_answer = fn (func : ('a -> 'b option)) => (fn (alist : 'a list) : 'b =
                                    then
                                        raise NoAnswer
                                    else
-                                       hd filtered
+                                       valOf(hd filtered)
                                end
                               )
 
@@ -74,8 +74,13 @@ val all_answers = fn func => (fn alist => let
                                   val mapped = List.map(func)(alist)
                                   val filtered = List.filter(fn a => isSome(a))(mapped)
                                   val filteredmap = List.map(fn a => valOf a)(filtered)
+                                  val result = List.map(fn a => valOf(a))(filteredmap)
                               in
-                                  List.map(fn a => valOf(a))(filteredmap)
+                                  if null result
+                                  then
+                                      NONE
+                                  else
+                                      SOME result
                               end
                                           )
 
@@ -89,8 +94,8 @@ val count_wild_and_variable_lengths = fn p => let
                                       in
                                           curried p
                                       end
-val count_some_var = fn p => let
-                         val curried = g (fn x => 0)(fn y => 1)
+fun count_some_var (s, p) = let
+                         val curried = g (fn x => 0)(fn y => if y = s then 1 else 0)
                      in
                          curried p
                      end
@@ -141,7 +146,7 @@ val check_pat = fn (p : pattern) => let
                                                         Constructor sv => if #1 sp = #1 sv andalso isSome(helper(#2 sp, #2 sv)) then
                                                                                 SOME [(p)] else NONE)
                                               | _ => NONE *)
-fun help (v, p) : (string * valu) list option = case (p, v) of
+fun help (v, p): (string * valu) list option = case (p, v) of
                     (Wildcard, _) => SOME []
                   | (Variable s, v) => SOME [(s, v)] 
                   | (UnitP, Unit) => SOME []
@@ -179,16 +184,17 @@ fun help (v, p) : (string * valu) list option = case (p, v) of
                   | _ => NONE
 
 val match = fn (v, p) => let
-                val found = help(p v)
+                val found = help(v, p)
             in
-                found
+                if isSome found
+                then SOME (valOf(found))
+                else NONE
             end
-val first_match = fn v =>
-                     fn pats =>
+fun first_match v pats =
                         let
-                            val found = List.map (fn a => (v a)) pats
+                            val found = List.map (fn a => (v, a)) pats
                             val curried = first_answer help
                         in
-                            (curried found
-                            handle NoAnswer => NONE)
+                            SOME (curried found)
+                            handle NoAnswer => NONE
                         end
